@@ -2,7 +2,6 @@
 A simple tool to remove duplicate or near-duplicate PDF pages by comparing extracted text.
 '''
 
-from PyPDF2 import PdfFileReader, PdfFileWriter
 import fitz
 import easygui
 import re
@@ -16,32 +15,36 @@ outFile = easygui.filesavebox(msg='Save the PDF file', title='File Browser', fil
 # Keep track of pages to keep
 keepPages = []
 
-with open(inFile, 'rb') as f:
-    reader = PdfFileReader(f)
-    numOfPages = reader.getNumPages()
+# Open file
+f = fitz.open(inFile)
 
-    for pageNum in range(numOfPages-1):
-        # Get current page and next page
-        currPage = reader.getPage(pageNum)
-        nextPage = reader.getPage(pageNum+1)
+numOfPages = f.page_count
 
-        # Extract Text from both current and next page
-        currText = currPage.extractText().strip()
-        nextText = nextPage.extractText().strip()
-       
-        # Keep current page if next page doesn't already contain all text on current page
-        if (currText not in nextText):
-            keepPages.append(pageNum)
+for pageNum in range(numOfPages-1):
+    # Get current page and next page
+    currPage = f[pageNum]
+    nextPage = f[pageNum+1]
 
-        # Sub-topic pages with titles that are used on the next page do not have page numbers written on the page
-        elif (re.search("\n[0-9][0-9]*$", currText, re.MULTILINE) == None):
-            keepPages.append(pageNum)
+    # Extract text from both current and next page
+    # Remove all whitespaces
+    currText = currPage.get_text("text").encode("ascii", "ignore").decode('ascii')
+    nextText = nextPage.get_text("text").encode("ascii", "ignore").decode('ascii')
 
-    # Remember to add last page
-    keepPages.append(numOfPages-1)
+    currStrip = re.sub(r"(\s|[0-9]+$)", "", currText)
+    nextStrip = re.sub(r"(\s|[0-9]+$)", "", nextText)
+
+    # Keep current page if next page doesn't already contain all text on current page
+    if (currStrip not in nextStrip):
+        keepPages.append(pageNum)
+
+    # Sub-topic pages with titles that are used on the next page do not have page numbers written on the page
+    elif (re.search("\n[0-9][0-9]*$", currText, re.MULTILINE) == None):
+        keepPages.append(pageNum)
+
+# Remember to add last page
+keepPages.append(numOfPages-1)
 
 # Create a new file using the page numbers of pages to keep
-pdf = fitz.open(inFile)
-pdf.select(keepPages)
-pdf.save(outFile)
-pdf.close()
+f.select(keepPages)
+f.save('{0}.pdf'.format(outFile))
+f.close()
